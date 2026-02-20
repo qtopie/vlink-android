@@ -1,0 +1,29 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools"
+          android:installLocation="internalOnly">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-feature android:name="android.hardware.touchscreen"
+                  android:required="false"/>
+    <application android:allowBackup="false"
+                 android:label="vlink"
+                 android:icon="@mipmap/ic_launcher"
+                 android:theme="@style/Theme.Shadowsocks.Immersive"
+                 tools:replace="android:theme">
+        <service android:name=".VlinkVpnService"
+                 android:permission="android.permission.BIND_VPN_SERVICE"
+                 android:exported="false">
+            <intent-filter>
+                <action android:name="android.net.VpnService"/>
+            </intent-filter>
+        </service>
+
+        <activity android:name=".ConfigActivity"
+                  android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

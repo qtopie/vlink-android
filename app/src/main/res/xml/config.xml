@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <PreferenceCategory app:title="Shadowsocks Server Settings">
+        <EditTextPreference
+            app:key="server_address"
+            android:persistent="true"
+            app:title="Server Address"
+            app:useSimpleSummaryProvider="true"/>
+        <EditTextPreference
+            app:key="server_port"
+            android:persistent="true"
+            app:title="Server Port"
+            app:useSimpleSummaryProvider="true"/>
+        <EditTextPreference
+            app:key="password"
+            android:persistent="true"
+            app:title="Password"/>
+        <ListPreference
+            app:key="encrypt_method"
+            android:persistent="true"
+            app:entries="@array/encrypt_methods"
+            app:entryValues="@array/encrypt_methods"
+            app:title="Encryption Method"
+            app:useSimpleSummaryProvider="true"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="Transport Settings (v2ray-plugin)">
+        <Preference
+            app:key="mode"
+            android:persistent="true"
+            app:title="Transport mode"
+            app:summary="gRPC (TLS enforced)"
+            android:enabled="false"/>
+        <EditTextPreference
+            app:key="host"
+            android:persistent="true"
+            app:title="Plugin Hostname"
+            app:useSimpleSummaryProvider="true"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:title="Debug">
+        <com.takisoft.preferencex.SimpleMenuPreference
+            app:key="loglevel"
+            android:persistent="true"
+            app:entries="@array/loglevels"
+            app:entryValues="@array/loglevels"
+            app:icon="@drawable/ic_action_bug_report"
+            app:title="Logcat level"
+            app:useSimpleSummaryProvider="true"/>
+    </PreferenceCategory>
+</PreferenceScreen>

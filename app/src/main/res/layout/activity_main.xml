@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:orientation="vertical"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent">
+    <include layout="@layout/toolbar_light_dark" />
+
+    <!-- Status Bar for Speed and Info -->
+    <LinearLayout
+        android:id="@+id/status_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#F5F5F5"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:gravity="center_vertical">
+        
+        <TextView
+            android:id="@+id/tv_status"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="Status: Disconnected"
+            android:textColor="#333333"
+            android:textStyle="bold"/>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="end">
+            <TextView
+                android:id="@+id/tv_down_speed"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="↓ 0 B/s"
+                android:textColor="#2196F3"
+                android:textSize="12sp"
+                android:textStyle="italic"/>
+            <TextView
+                android:id="@+id/tv_up_speed"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="↑ 0 B/s"
+                android:textColor="#4CAF50"
+                android:textSize="12sp"
+                android:textStyle="italic"/>
+        </LinearLayout>
+    </LinearLayout>
+    
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:gravity="center">
+        
+        <Button
+            android:id="@+id/btn_start"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Start"
+            android:layout_margin="4dp"/>
+            
+        <Button
+            android:id="@+id/btn_stop"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Stop"
+            android:layout_margin="4dp"
+            android:enabled="false"/>
+            
+        <Button
+            android:id="@+id/btn_troubleshoot"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Check"
+            android:layout_margin="4dp"/>
+    </LinearLayout>
+
+    <fragment android:id="@+id/content"
+              class="com.github.shadowsocks.plugin.v2ray.ConfigFragment"
+              android:layout_width="match_parent"
+              android:layout_height="0dp"
+              android:layout_weight="1"/>
+</LinearLayout>
