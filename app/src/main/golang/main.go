@@ -54,6 +54,7 @@ func Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative(
 	logPathStr C.jstring,
 ) {
 	C.log_to_android(C.CString("JNI: startVLinkNative entered"))
+	C.store_java_vm(env, clazz)
 
 	// Convert JNI strings to Go strings
 	cLogPath := C.get_string(env, logPathStr)
@@ -101,14 +102,15 @@ func Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative(
 
 	// Start in a goroutine to not block the JNI call
 	go func() {
-		log.Printf("vlink Goroutine: Started (FD: %d)", goTunFD)
+		log.Printf("vlink Goroutine: Started (FD: %d, MTU: %d, TunAddr: %s)", goTunFD, goTunMTU, goTunAddr)
 		C.log_to_android(C.CString("Goroutine: Starting TUN handler..."))
 
 		server, cipher, pass, err := parseServerUrl(goServer)
 		if err != nil {
-			log.Printf("vlink: parsing server details: %v", err)
+			log.Printf("vlink: Error parsing server URL '%s': %v", goServer, err)
 			return
 		}
+		log.Printf("vlink: Parsed server address: %s, cipher: %s", server, cipher)
 
 		if goUserAgent == "" {
 			goUserAgent = defaultGRPCUserAgent
@@ -117,19 +119,20 @@ func Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative(
 
 		ciph, err := core.PickCipher(cipher, nil, pass)
 		if err != nil {
-			log.Printf("vlink Error: pick cipher: %v", err)
+			log.Printf("vlink Error: pick cipher '%s': %v", cipher, err)
 			return
 		}
 
-		log.Printf("vlink: Starting TUN inbound with FD %d. SNI Host (from Android): %s", goTunFD, goHost)
-		log.Printf("vlink: Connection parameters - Server: %s, Host: %s, UserAgent: %s, ServiceName: %s", goServer, goHost, goUserAgent, goServiceName)
+		log.Printf("vlink: Starting TUN inbound. SNI Host: %s, ServiceName: %s", goHost, goServiceName)
 
 		// Initialize and start the ServerManager with the initial server(s).
+		log.Printf("vlink: Initializing ServerManager with server %s", server)
 		sm := servermanager.New([]string{server}, 10*time.Minute, 2*time.Second) // Long interval for regular checks
 		sm.Start()
-		go servermanager.RunCDNScanner(sm, goHost, 443)
+// 		go servermanager.RunCDNScanner(sm, goHost, 443)
 
 		// 3. 初始化 SocksInboundHandler 的配置
+		log.Printf("vlink: Configuring SocksInboundHandler (TLS: true, Host: %s)", goHost)
 		sconf := &inbound.InboundConfig{
 			ListenAddress: "127.0.0.1",
 			ListenPort:    0, // 内存桥接模式，端口设为 0 即可
@@ -140,7 +143,6 @@ func Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative(
 			SkipVerify:    false,
 			ServerManager: sm,
 		}
-
 		socksHandler := &inbound.SocksInboundHandler{}
 		socksHandler.SetConfig(sconf)
 
@@ -156,12 +158,13 @@ func Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative(
 			SocksHandler: socksHandler,
 		}
 
+		log.Printf("vlink: Starting TunInboundHandler...")
 		if err := tunHandler.Start(); err != nil {
 			log.Printf("vlink: Failed to start TUN handler: %v", err)
 			return
 		}
 
-		log.Printf("vlink: TUN handler started successfully")
+		log.Printf("vlink: TUN handler started successfully. Entering wait state.")
 		// resources will be closed automatically
 		select {}
 	}()

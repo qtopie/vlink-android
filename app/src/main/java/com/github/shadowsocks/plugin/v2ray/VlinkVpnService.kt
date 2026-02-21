@@ -21,8 +21,21 @@ class VlinkVpnService : VpnService() {
         const val EXTRA_SPEED_DOWN = "extra_speed_down"
         const val EXTRA_STATE = "extra_state"
 
+        @Volatile
+        private var INSTANCE: VlinkVpnService? = null
+
         init {
             System.loadLibrary("vlink")
+        }
+
+        // Called from native code to ask VpnService to protect a socket FD.
+        @JvmStatic
+        fun protectFd(fd: Int): Boolean {
+            return try {
+                INSTANCE?.protect(fd) ?: false
+            } catch (e: Exception) {
+                false
+            }
         }
     }
 
@@ -89,7 +102,7 @@ class VlinkVpnService : VpnService() {
             val tunAddr = "172.19.0.2/30"
             val logPath = File(cacheDir, "vlink.log").absolutePath
             
-            Log.i(TAG, "Starting VLink via JNI (FD: $fd, Log: $logPath)")
+            Log.i(TAG, "Starting vlink via JNI (FD: $fd, Log: $logPath)")
             
             startVLinkNative(
                 fd = fd,
@@ -112,6 +125,7 @@ class VlinkVpnService : VpnService() {
 
     private fun startVpn() {
         if (isRunning) return
+        INSTANCE = this
         try {
             val options = Settings.getOptions(this)
 
@@ -123,6 +137,7 @@ class VlinkVpnService : VpnService() {
                 .addDnsServer("8.8.8.8")
                 .addDnsServer("1.1.1.1")
                 .addAllowedApplication("com.android.chrome")
+                .addAllowedApplication("com.google.android.apps.bard")
                 .addRoute("0.0.0.0", 0)
 
 
@@ -148,6 +163,7 @@ class VlinkVpnService : VpnService() {
 
     private fun stopVpn() {
         isRunning = false
+        INSTANCE = null
         statsHandler.removeCallbacks(statsRunnable)
         
         sendBroadcast(Intent(BROADCAST_STATS).apply { putExtra(EXTRA_STATE, false) })
