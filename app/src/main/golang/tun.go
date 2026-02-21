@@ -2,6 +2,12 @@
 
 package main
 
+/*
+#include <jni.h>
+
+// Forward declaration: protect_fd is implemented in jni_helpers.c
+jboolean protect_fd(jint fd);
+*/
 import "C"
 
 import (
