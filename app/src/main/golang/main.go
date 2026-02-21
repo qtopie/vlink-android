@@ -28,12 +28,17 @@ static JavaVM* global_vm = NULL;
 static jclass global_vlinkvpnservice_cls = NULL;
 
 // Store JavaVM and a global reference to the VlinkVpnService class for later use from native threads.
-void store_java_vm(JNIEnv* env, jclass clazz) {
+// Accept either a jobject (instance) or jclass; if an instance is passed, obtain its class.
+void store_java_vm(JNIEnv* env, jobject obj) {
     if (global_vm == NULL) {
         (*env)->GetJavaVM(env, &global_vm);
     }
-    if (global_vlinkvpnservice_cls == NULL && clazz != NULL) {
-        global_vlinkvpnservice_cls = (jclass)(*env)->NewGlobalRef(env, clazz);
+    if (global_vlinkvpnservice_cls == NULL && obj != NULL) {
+        jclass cls = (*env)->GetObjectClass(env, obj);
+        if (cls != NULL) {
+            global_vlinkvpnservice_cls = (jclass)(*env)->NewGlobalRef(env, cls);
+            (*env)->DeleteLocalRef(env, cls);
+        }
     }
 }
 
@@ -74,7 +79,7 @@ const defaultGRPCUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap
 //export Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative
 func Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative(
 	env *C.JNIEnv,
-	clazz C.jclass,
+	clazz C.jobject,
 	fd C.jint,
 	serverStr C.jstring,
 	hostStr C.jstring,
