@@ -20,6 +20,6 @@ fi
 pushd "$(dirname "$0")/../src/main/golang" >/dev/null
 
 # Use sudo to ensure access to /dev/net/tun
-sudo go run ./cmd/local
+sudo /usr/local/go/bin/go run ./cmd/local
 
 popd >/dev/null
