@@ -244,11 +244,11 @@ func (h *TunInboundHandler) Start() error {
 				user = u.User.Username()
 				pass, _ = u.User.Password()
 			}
-			p, err := NewSocks5Proxy(addr, user, pass)
+			p, err := newSocks5Proxy(addr, user, pass)
 			if err != nil {
 				log.Printf("TUN: failed to create upstream proxy: %v", err)
 			} else {
-				T().SetProxy(p)
+				T().setProxy(p)
 				// register protect_fd socket option on local dialer registry
 				RegisterSockOpt(func(_, _ string, rc syscall.RawConn) error {
 					var innerErr error
@@ -265,7 +265,7 @@ func (h *TunInboundHandler) Start() error {
 					return innerErr
 				})
 				// Configure direct dialers on tunnel for LAN/direct logic
-				T().SetDirectDialer(func(ctx context.Context, m *Metadata) (net.Conn, error) {
+				T().setDirectDialer(func(ctx context.Context, m *Metadata) (net.Conn, error) {
 					// dial directly to destination
 					nd := &net.Dialer{
 						Timeout: 3 * time.Second,
@@ -286,7 +286,7 @@ func (h *TunInboundHandler) Start() error {
 					}
 					return nd.DialContext(ctx, "tcp", m.DestinationAddress())
 				})
-				T().SetDirectPacketDialer(func(m *Metadata) (net.PacketConn, error) {
+				T().setDirectPacketDialer(func(m *Metadata) (net.PacketConn, error) {
 					// create a UDP packet conn for direct UDP
 					return ListenPacket("udp", "")
 				})
