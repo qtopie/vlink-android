@@ -1,6 +1,7 @@
 package com.github.shadowsocks.plugin.v2ray
 
 import android.content.Intent
+import android.net.IpPrefix
 import android.net.TrafficStats
 import android.net.VpnService
 import android.os.Handler
@@ -10,6 +11,8 @@ import android.util.Log
 import com.github.shadowsocks.plugin.PluginOptions
 import java.io.File
 import java.io.IOException
+import java.net.InetAddress
+
 
 class VlinkVpnService : VpnService() {
     companion object {
@@ -26,9 +29,7 @@ class VlinkVpnService : VpnService() {
         @Volatile
         private var INSTANCE: VlinkVpnService? = null
 
-        init {
-            System.loadLibrary("vlink")
-        }
+        // Using gomobile-generated binding (vlink.aar) which loads its own native libs.
 
         // Called from native code to ask VpnService to protect a socket FD.
         @JvmStatic
@@ -47,18 +48,6 @@ class VlinkVpnService : VpnService() {
     private var lastTxBytes: Long = 0
     private var isRunning = false
     
-    private external fun startVLinkNative(
-        fd: Int,
-        server: String,
-        host: String,
-        userAgent: String,
-        serviceName: String,
-        tunAddr: String,
-        upstreamSocks: String,
-        tunMTU: Int,
-        verbose: Boolean,
-        logPath: String
-    )
 
     private val statsRunnable = object : Runnable {
         override fun run() {
@@ -107,17 +96,17 @@ class VlinkVpnService : VpnService() {
             
             Log.i(TAG, "Starting vlink via JNI (FD: $fd, Log: $logPath)")
             
-            startVLinkNative(
-                fd = fd,
-                server = serverUrl,
-                host = options["host"] ?: "qtopie.space",
-                userAgent = options["userAgent"] ?: "",
-                serviceName = options["serviceName"] ?: "moon.shot",
-                tunAddr = tunAddr,
-                upstreamSocks = options["upstreamSocks"] ?: "socks5://192.168.31.63:1080",
-                tunMTU = MTU,
-                verbose = options["verbose"] == "true",
-                logPath = logPath
+            vlinkjni.Vlinkjni.StartVLink(
+                fd,
+                serverUrl,
+                options["host"] ?: "qtopie.space",
+                options["userAgent"] ?: "",
+                options["serviceName"] ?: "moon.shot",
+                tunAddr,
+                options["upstreamSocks"] ?: "socks5://192.168.31.63:1080",
+                MTU,
+                options["verbose"] == "true",
+                logPath
             )
 
             Log.i(TAG, "vlink native call initiated with FD $fd")
@@ -141,14 +130,32 @@ class VlinkVpnService : VpnService() {
                 .addDnsServer("223.5.5.5")
                 .addDnsServer("223.6.6.6")
                 .addAllowedApplication("com.android.chrome")
-//                .addAllowedApplication("com.google.android.apps.bard")
+                .addAllowedApplication("com.google.android.apps.bard")
                 .addRoute("0.0.0.0", 0)
 
 
-            val vpnInterface = builder.establish() ?: throw IOException("Failed to establish VPN interface")
+            // 核心：排除局域网网段
+            try {
+                // 排除常见的私有网段
+                builder.excludeRoute(IpPrefix(InetAddress.getByName("10.0.0.0"), 8))
+                builder.excludeRoute(IpPrefix(InetAddress.getByName("172.16.0.0"), 12))
+                builder.excludeRoute(IpPrefix(InetAddress.getByName("192.168.0.0"), 16))
+
+
+                // 如果你有特定的本地 DNS 或特殊地址，也可以一并排除
+                // builder.excludeRoute(new IpPrefix(InetAddress.getByName("1.1.1.1"), 32));
+            } catch (e: java.lang.Exception) {
+                Log.e("VPN", "excludeRoute not supported or failed", e)
+            }
+
+            val pfd = builder.establish() ?: throw IOException("Failed to establish VPN interface")
+
+            val fd = pfd.detachFd()
+
+            vpnInterface = ParcelFileDescriptor.adoptFd(fd)
 
             // 2. Start vlink unified binary (TUN + Encryption + Transport)
-            startVLink(options, vpnInterface.fd)
+            startVLink(options, fd)
 
             isRunning = true
             lastRxBytes = TrafficStats.getTotalRxBytes()
