@@ -4,6 +4,7 @@ go 1.25.6
 
 require (
 	github.com/qtopie/vlink v0.4.1
+	github.com/qtopierw/workspace/projects/vlink-android/app/src/main/golang v0.0.0-00010101000000-000000000000
 	golang.org/x/mobile v0.0.0-20260217195705-b56b3793a9c4
 	golang.org/x/net v0.50.0
 	golang.org/x/sys v0.41.0
@@ -34,3 +35,5 @@ require (
 replace gvisor.dev/gvisor => gvisor.dev/gvisor v0.0.0-20231020174304-b8a429915ff1
 
 replace google.golang.org/genproto/googleapis/rpc => google.golang.org/genproto v0.0.0-20250818200422-3122310a409c
+
+replace github.com/qtopierw/workspace/projects/vlink-android/app/src/main/golang => ./
