@@ -6,7 +6,7 @@
     <uses-feature android:name="android.hardware.touchscreen"
                   android:required="false"/>
     <application android:allowBackup="false"
-                 android:label="vlink"
+                 android:label="VLink"
                  android:icon="@mipmap/ic_launcher"
                  android:theme="@style/Theme.Shadowsocks.Immersive"
                  tools:replace="android:theme">
@@ -18,7 +18,7 @@
             </intent-filter>
         </service>
 
-        <activity android:name=".ConfigActivity"
+        <activity android:name=".MainActivity"
                   android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>

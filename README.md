@@ -1,5 +1,7 @@
 # vlink android
 
-vlink go相关的代码地址: `../vlink/v2ray/inbound/tun.go`
+流量出站: vpn -> tun.go -> socks5 -> shadowsocks(encrypted) -> v2ray-grpc -> cdn -> server
 
-流量出站: vpn -> tun.go -> shadowsocks(encrypted) -> v2ray-grpc -> 
+流量出站: vpn -> tun.go -> socks5 -> upstream socks5代理
+
+流量出站: vpn -> tun.go -> socks5 -> socks5://192.168.31.63:1080

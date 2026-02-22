@@ -40,6 +40,7 @@ class ConfigFragment : PreferenceFragmentCompat(), Preference.OnPreferenceChange
     private val modePref by lazy { findPreference<Preference>("mode")!! }
     private val host by lazy { findPreference<EditTextPreference>("host")!! }
     private val loglevel by lazy { findPreference<ListPreference>("loglevel")!! }
+    private val upstreamSocks by lazy { findPreference<EditTextPreference>("upstreamSocks")!! }
 
     private fun readMode() = Pair("grpc", true)
 
@@ -54,6 +55,7 @@ class ConfigFragment : PreferenceFragmentCompat(), Preference.OnPreferenceChange
         if (tls) this["tls"] = null
         putWithDefault("host", host.text, "qtopie.space")
         putWithDefault("loglevel", loglevel.value, "warning")
+        putWithDefault("upstreamSocks", upstreamSocks.text, "")
     }
 
     fun onInitializePluginOptions(options: PluginOptions) {
@@ -66,7 +68,8 @@ class ConfigFragment : PreferenceFragmentCompat(), Preference.OnPreferenceChange
         // UI is fixed to gRPC with TLS enforced
         modePref.summary = "gRPC (TLS enforced)"
         host.text = options["host"] ?: "qtopie.space"
-        loglevel.value = options["loglevel"] ?: "warning"
+        loglevel.value = options["loglevel"] ?: "debug"
+        upstreamSocks.text = options["upstreamSocks"] ?: "socks5://192.168.31.63:1080"
     }
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
@@ -85,6 +88,7 @@ class ConfigFragment : PreferenceFragmentCompat(), Preference.OnPreferenceChange
             password.summary = "********"
             true
         }
+        upstreamSocks.setOnBindEditTextListener { it.inputType = InputType.TYPE_TEXT_VARIATION_URI }
     }
 
     fun setEditable(editable: Boolean) {

@@ -3,7 +3,7 @@ module github.com/qtopie/vlink/libvlink
 go 1.25.6
 
 require (
-	github.com/qtopie/vlink v0.3.9
+	github.com/qtopie/vlink v0.4.1
 	golang.org/x/net v0.49.0
 	golang.org/x/sys v0.40.0
 	gvisor.dev/gvisor v0.0.0-20231020174304-b8a429915ff1

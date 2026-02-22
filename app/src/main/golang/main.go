@@ -53,6 +53,7 @@ func Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative(
 	userAgentStr C.jstring,
 	serviceNameStr C.jstring,
 	tunAddrStr C.jstring,
+	upstreamSocksStr C.jstring,
 	tunMTU C.jint,
 	verbose C.jboolean,
 	logPathStr C.jstring,
@@ -95,6 +96,10 @@ func Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative(
 	cTunAddr := C.get_string(env, tunAddrStr)
 	defer C.release_string(env, tunAddrStr, cTunAddr)
 	goTunAddr := C.GoString(cTunAddr)
+
+	cUpstream := C.get_string(env, upstreamSocksStr)
+	defer C.release_string(env, upstreamSocksStr, cUpstream)
+	goUpstream := C.GoString(cUpstream)
 
 	goTunFD := int(fd)
 	goTunMTU := int(tunMTU)
@@ -144,7 +149,6 @@ func Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative(
 			Host:          goHost,        // 远程服务器的 SNI/Host
 			ServiceName:   goServiceName, // gRPC 服务名
 			TLS:           true,
-			SkipVerify:    false,
 			ServerManager: sm,
 		}
 		socksHandler := &inbound.SocksInboundHandler{}
@@ -155,6 +159,7 @@ func Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative(
 			FD:      goTunFD,
 			Address: []string{goTunAddr},
 			MTU:     goTunMTU,
+			UpstreamSocks: goUpstream,
 		}
 
 		tunHandler := &TunInboundHandler{

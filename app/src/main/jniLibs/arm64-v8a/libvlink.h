@@ -45,6 +45,10 @@ static void log_to_android(const char* msg) {
     LOGI("%s", msg);
 }
 
+// Forward declarations for functions implemented in jni_helpers.c
+void store_java_vm(JNIEnv* env, jobject obj);
+jboolean protect_fd(jint fd);
+
 #line 1 "cgo-generated-wrapper"
 
 
@@ -107,7 +111,7 @@ typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 extern "C" {
 #endif
 
-extern void Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative(JNIEnv* env, jclass clazz, jint fd, jstring serverStr, jstring hostStr, jstring userAgentStr, jstring serviceNameStr, jstring tunAddrStr, jint tunMTU, jboolean verbose, jstring logPathStr);
+extern void Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative(JNIEnv* env, jobject clazz, jint fd, jstring serverStr, jstring hostStr, jstring userAgentStr, jstring serviceNameStr, jstring tunAddrStr, jstring upstreamSocksStr, jint tunMTU, jboolean verbose, jstring logPathStr);
 
 #ifdef __cplusplus
 }

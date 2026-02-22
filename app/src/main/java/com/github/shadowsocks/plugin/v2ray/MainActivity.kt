@@ -18,8 +18,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.graphics.Insets
 import com.github.shadowsocks.plugin.ConfigurationActivity
 import com.github.shadowsocks.plugin.PluginOptions
+import androidx.activity.result.contract.ActivityResultContracts
 
-class ConfigActivity : ConfigurationActivity(), Toolbar.OnMenuItemClickListener {
+class MainActivity : ConfigurationActivity(), Toolbar.OnMenuItemClickListener {
     private val child by lazy { supportFragmentManager.findFragmentById(R.id.content) as ConfigFragment }
     private var oldOptions: PluginOptions = PluginOptions()
     private var isVpnRunning = false
@@ -36,6 +37,14 @@ class ConfigActivity : ConfigurationActivity(), Toolbar.OnMenuItemClickListener 
             val upSpeed = intent?.getStringExtra(VlinkVpnService.EXTRA_SPEED_UP) ?: "0 B/s"
             val running = intent?.getBooleanExtra(VlinkVpnService.EXTRA_STATE, false) ?: false
             updateState(running, downSpeed, upSpeed)
+        }
+    }
+
+    private val vpnLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            startService(Intent(this, VlinkVpnService::class.java).setAction(VlinkVpnService.ACTION_START))
         }
     }
 
@@ -63,11 +72,11 @@ class ConfigActivity : ConfigurationActivity(), Toolbar.OnMenuItemClickListener 
         }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         findViewById<Toolbar>(com.github.shadowsocks.plugin.R.id.toolbar).apply {
-            title = this@ConfigActivity.title
+            title = this@MainActivity.title
             setNavigationIcon(com.github.shadowsocks.plugin.R.drawable.ic_navigation_close)
             setNavigationOnClickListener { onBackPressed() }
             inflateMenu(R.menu.toolbar_config)
-            setOnMenuItemClickListener(this@ConfigActivity)
+            setOnMenuItemClickListener(this@MainActivity)
         }
 
         btnStart.setOnClickListener { 
@@ -99,9 +108,9 @@ class ConfigActivity : ConfigurationActivity(), Toolbar.OnMenuItemClickListener 
     private fun startVpn() {
         val intent = VpnService.prepare(this)
         if (intent != null) {
-            startActivityForResult(intent, 0)
+            vpnLauncher.launch(intent) // Use the new Activity Result API launcher
         } else {
-            onActivityResult(0, RESULT_OK, null)
+            startService(Intent(this, VlinkVpnService::class.java).setAction(VlinkVpnService.ACTION_START))
         }
     }
 

@@ -37,6 +37,12 @@
             android:persistent="true"
             app:title="Plugin Hostname"
             app:useSimpleSummaryProvider="true"/>
+        <EditTextPreference
+            app:key="upstreamSocks"
+            android:persistent="true"
+            app:title="Upstream SOCKS5 Proxy"
+            app:dialogTitle="Upstream SOCKS5 Proxy (e.g. socks5://192.168.31.63:1080)"
+            app:useSimpleSummaryProvider="true"/>
     </PreferenceCategory>
 
     <PreferenceCategory

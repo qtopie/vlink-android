@@ -21,6 +21,8 @@ class VlinkVpnService : VpnService() {
         const val EXTRA_SPEED_DOWN = "extra_speed_down"
         const val EXTRA_STATE = "extra_state"
 
+        const val MTU = 1200
+
         @Volatile
         private var INSTANCE: VlinkVpnService? = null
 
@@ -52,6 +54,7 @@ class VlinkVpnService : VpnService() {
         userAgent: String,
         serviceName: String,
         tunAddr: String,
+        upstreamSocks: String,
         tunMTU: Int,
         verbose: Boolean,
         logPath: String
@@ -111,7 +114,8 @@ class VlinkVpnService : VpnService() {
                 userAgent = options["userAgent"] ?: "",
                 serviceName = options["serviceName"] ?: "moon.shot",
                 tunAddr = tunAddr,
-                tunMTU = 1500,
+                upstreamSocks = options["upstreamSocks"] ?: "socks5://192.168.31.63:1080",
+                tunMTU = MTU,
                 verbose = options["verbose"] == "true",
                 logPath = logPath
             )
@@ -132,23 +136,19 @@ class VlinkVpnService : VpnService() {
             // 1. Establish VPN Interface
             val builder = Builder()
                 .setSession("vlink")
-                .setMtu(1500)
+                .setMtu(MTU)
                 .addAddress("172.19.0.1", 30) // Go side will be 172.19.0.2
-                .addDnsServer("8.8.8.8")
-                .addDnsServer("1.1.1.1")
+                .addDnsServer("223.5.5.5")
+                .addDnsServer("223.6.6.6")
                 .addAllowedApplication("com.android.chrome")
-                .addAllowedApplication("com.google.android.apps.bard")
+//                .addAllowedApplication("com.google.android.apps.bard")
                 .addRoute("0.0.0.0", 0)
 
 
-            val pfd = builder.establish() ?: throw IOException("Failed to establish VPN interface")
-
-            // Fix: Detach FD to ensure its lifecycle is independent of the PFD object
-            val fd = pfd.detachFd()
-            vpnInterface = ParcelFileDescriptor.adoptFd(fd)
+            val vpnInterface = builder.establish() ?: throw IOException("Failed to establish VPN interface")
 
             // 2. Start vlink unified binary (TUN + Encryption + Transport)
-            startVLink(options, fd)
+            startVLink(options, vpnInterface.fd)
 
             isRunning = true
             lastRxBytes = TrafficStats.getTotalRxBytes()
