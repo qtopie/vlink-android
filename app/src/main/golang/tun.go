@@ -44,12 +44,21 @@ type TunInboundHandler struct {
 	SocksHandler *inbound.SocksInboundHandler
 }
 
+const (
+	ModeTun2Direct       = "tun2direct"
+	ModeTun2SocksUpstream = "tun2socksUpstream"
+	ModeTun2SocksInbound  = "tun2socksInbound"
+)
+
 type TunInboundConfig struct {
 	Name          string
 	MTU           int
 	FD            int
 	Address       []string
 	UpstreamSocks string
+	// Mode controls how TUN traffic is forwarded.
+	// Allowed: ModeTun2Direct (default), ModeTun2SocksUpstream, ModeTun2SocksInbound
+	Mode          string
 }
 
 // wrapper to satisfy tun2socks adapter.TCPConn
@@ -227,8 +236,38 @@ func (h *TunInboundHandler) Start() error {
 		{Destination: header.IPv4EmptySubnet, NIC: nicID},
 	})
 
-	// If upstream socks is configured, parse it and set tunnel global proxy.
-	if h.config != nil && h.config.UpstreamSocks != "" {
+	// Decide forwarding mode (default: tun2direct)
+	mode := ModeTun2Direct
+	if h.config != nil && h.config.Mode != "" {
+		mode = h.config.Mode
+	}
+
+	// Register a default direct dialer that uses VpnService.protect via protectFD
+	T().setDirectDialer(func(ctx context.Context, m *Metadata) (net.Conn, error) {
+		nd := &net.Dialer{
+			Timeout: 3 * time.Second,
+			Control: func(network, address string, c syscall.RawConn) error {
+				var controlErr error
+				if err := c.Control(func(fd uintptr) {
+					if !protectFD(int(fd)) {
+						controlErr = fmt.Errorf("TUN protect_fd failed for fd %d", fd)
+						return
+					}
+					_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
+				}); err != nil {
+					controlErr = err
+				}
+				return controlErr
+			},
+		}
+		return nd.DialContext(ctx, "tcp", m.DestinationAddress())
+	})
+	T().setDirectPacketDialer(func(m *Metadata) (net.PacketConn, error) {
+		return ListenPacket("udp", "")
+	})
+
+	// If upstream socks is configured and mode is tun2socksUpstream, parse it and set tunnel global proxy.
+	if mode == ModeTun2SocksUpstream && h.config != nil && h.config.UpstreamSocks != "" {
 		up := h.config.UpstreamSocks
 		if !strings.Contains(up, "://") {
 			up = "socks5://" + up
