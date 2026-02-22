@@ -1,6 +1,6 @@
 //go:build linux || android
 
-package main
+package vlinkjni
 
 /*
 #include <jni.h>
@@ -11,6 +11,7 @@ jboolean protect_fd(jint fd);
 import "C"
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -24,6 +25,8 @@ import (
 	"github.com/qtopie/vlink/v2ray/inbound"
 	"golang.org/x/sys/unix"
 
+	"net/url"
+	// Local tun2socks-compatible stubs will be provided in tun2socks.go
 	"golang.org/x/net/proxy"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
@@ -37,7 +40,7 @@ import (
 )
 
 type TunInboundHandler struct {
-	Config       *TunInboundConfig
+	config *TunInboundConfig
 	SocksHandler *inbound.SocksInboundHandler
 }
 
@@ -49,14 +52,117 @@ type TunInboundConfig struct {
 	UpstreamSocks string
 }
 
+// wrapper to satisfy tun2socks adapter.TCPConn
+type adapterTCPConn struct {
+	*gonet.TCPConn
+	id *stack.TransportEndpointID
+}
+
+func (c *adapterTCPConn) ID() interface{} { return c.id }
+
+// wrapper to satisfy tun2socks adapter.UDPConn (both net.Conn and net.PacketConn)
+type adapterUDPConn struct {
+	pc  net.PacketConn
+	c   net.Conn
+	id  *stack.TransportEndpointID
+}
+
+func (u *adapterUDPConn) ID() interface{} { return u.id }
+
+func (u *adapterUDPConn) Close() error {
+	if u.c != nil {
+		return u.c.Close()
+	}
+	if u.pc != nil {
+		return u.pc.Close()
+	}
+	return nil
+}
+
+func (u *adapterUDPConn) LocalAddr() net.Addr {
+	if u.c != nil {
+		return u.c.LocalAddr()
+	}
+	if u.pc != nil {
+		return u.pc.LocalAddr()
+	}
+	return nil
+}
+
+func (u *adapterUDPConn) RemoteAddr() net.Addr {
+	if u.c != nil {
+		return u.c.RemoteAddr()
+	}
+	// PacketConn does not usually provide RemoteAddr; return nil.
+	return nil
+}
+
+func (u *adapterUDPConn) Read(b []byte) (int, error) {
+	if u.c != nil {
+		return u.c.Read(b)
+	}
+	return 0, fmt.Errorf("no underlying Conn for Read")
+}
+
+func (u *adapterUDPConn) Write(b []byte) (int, error) {
+	if u.c != nil {
+		return u.c.Write(b)
+	}
+	return 0, fmt.Errorf("no underlying Conn for Write")
+}
+
+func (u *adapterUDPConn) SetDeadline(t time.Time) error {
+	if u.c != nil {
+		return u.c.SetDeadline(t)
+	}
+	if u.pc != nil {
+		return u.pc.SetDeadline(t)
+	}
+	return nil
+}
+
+func (u *adapterUDPConn) SetReadDeadline(t time.Time) error {
+	if u.c != nil {
+		return u.c.SetReadDeadline(t)
+	}
+	if u.pc != nil {
+		return u.pc.SetReadDeadline(t)
+	}
+	return nil
+}
+
+func (u *adapterUDPConn) SetWriteDeadline(t time.Time) error {
+	if u.c != nil {
+		return u.c.SetWriteDeadline(t)
+	}
+	if u.pc != nil {
+		return u.pc.SetWriteDeadline(t)
+	}
+	return nil
+}
+
+func (u *adapterUDPConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
+	if u.pc != nil {
+		return u.pc.ReadFrom(p)
+	}
+	return 0, nil, fmt.Errorf("no underlying PacketConn for ReadFrom")
+}
+
+func (u *adapterUDPConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
+	if u.pc != nil {
+		return u.pc.WriteTo(p, addr)
+	}
+	return 0, fmt.Errorf("no underlying PacketConn for WriteTo")
+}
+
 func (h *TunInboundHandler) SetConfig(config *TunInboundConfig) {
-	h.Config = config
+	h.config = config
 }
 
 func (h *TunInboundHandler) Start() error {
 	// 使用 unix.Dup 复制一个 FD，这样 Go 即使关闭了这个副本，
 	// 也不会影响 Java 层的原始 FD，从而避开 fdsan 的检测, 避免影响java进程
-	newFd, err := unix.Dup(h.Config.FD)
+	newFd, err := unix.Dup(h.config.FD)
 	if err != nil {
 		return fmt.Errorf("failed to dup fd: %v", err)
 	}
@@ -70,7 +176,7 @@ func (h *TunInboundHandler) Start() error {
 	// 2. 初始化 gVisor Link Endpoint
 	linkEP, err := fdbased.New(&fdbased.Options{
 		FDs:               []int{int(file.Fd())},
-		MTU:               uint32(h.Config.MTU),
+		MTU:               uint32(h.config.MTU),
 		RXChecksumOffload: true,
 	})
 	if err != nil {
@@ -121,7 +227,77 @@ func (h *TunInboundHandler) Start() error {
 		{Destination: header.IPv4EmptySubnet, NIC: nicID},
 	})
 
+	// If upstream socks is configured, parse it and set tunnel global proxy.
+	if h.config != nil && h.config.UpstreamSocks != "" {
+		up := h.config.UpstreamSocks
+		if !strings.Contains(up, "://") {
+			up = "socks5://" + up
+		}
+		u, err := url.Parse(up)
+		if err != nil {
+			log.Printf("TUN: invalid upstream socks %s: %v", up, err)
+		} else {
+			addr := u.Host
+			user := ""
+			pass := ""
+			if u.User != nil {
+				user = u.User.Username()
+				pass, _ = u.User.Password()
+			}
+			p, err := NewSocks5Proxy(addr, user, pass)
+			if err != nil {
+				log.Printf("TUN: failed to create upstream proxy: %v", err)
+			} else {
+				T().SetProxy(p)
+				// register protect_fd socket option on local dialer registry
+				RegisterSockOpt(func(_, _ string, rc syscall.RawConn) error {
+					var innerErr error
+					if err := rc.Control(func(fd uintptr) {
+						res := C.protect_fd(C.int(fd))
+						if res == 0 {
+							innerErr = fmt.Errorf("TUN protect_fd failed for fd %d", fd)
+							return
+						}
+						_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
+					}); err != nil {
+						return err
+					}
+					return innerErr
+				})
+				// Configure direct dialers on tunnel for LAN/direct logic
+				T().SetDirectDialer(func(ctx context.Context, m *Metadata) (net.Conn, error) {
+					// dial directly to destination
+					nd := &net.Dialer{
+						Timeout: 3 * time.Second,
+						Control: func(network, address string, c syscall.RawConn) error {
+							var controlErr error
+							if err := c.Control(func(fd uintptr) {
+								res := C.protect_fd(C.int(fd))
+								if res == 0 {
+									controlErr = fmt.Errorf("TUN protect_fd failed for fd %d", fd)
+									return
+								}
+								_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
+							}); err != nil {
+								controlErr = err
+							}
+							return controlErr
+						},
+					}
+					return nd.DialContext(ctx, "tcp", m.DestinationAddress())
+				})
+				T().SetDirectPacketDialer(func(m *Metadata) (net.PacketConn, error) {
+					// create a UDP packet conn for direct UDP
+					return ListenPacket("udp", "")
+				})
+			}
+		}
+	}
+
 	// 5. TCP 转发器
+	// Ensure tunnel processing is running
+	T().ProcessAsync()
+
 	tcpForwarder := tcp.NewForwarder(netStack, 0, 10000, func(r *tcp.ForwarderRequest) {
 		id := r.ID()
 		log.Printf("TCP Forwarder: connection from %s:%d to %s:%d", id.RemoteAddress, id.RemotePort, id.LocalAddress, id.LocalPort)
@@ -135,18 +311,13 @@ func (h *TunInboundHandler) Start() error {
 		}
 		r.Complete(false)
 
-		localAddr, _ := ep.GetLocalAddress()
-		destStr := fmt.Sprintf("%s:%d", localAddr.Addr, localAddr.Port)
 		conn := gonet.NewTCPConn(&wq, ep)
 
-		// 		if localAddr.Port == 53 || localAddr.Port == 853 {
-		// 			log.Printf("TCP Forwarder: DNS/DoT traffic detected, using handleConnection for %s", destStr)
-		// 			go h.handleConnection(conn, destStr)
-		// 			return
-		// 		}
-
-		log.Printf("TCP Forwarder: LAN address %s, using simplyForward", destStr)
-		go h.simplyForward(conn, localAddr)
+		// capture id by value and take address to satisfy adapter interface
+		idVal := id
+		wrapped := &adapterTCPConn{TCPConn: conn, id: &idVal}
+		// Hand off to tunnel which will use the configured proxy for dialing
+		T().HandleTCP(wrapped)
 		// 		// 分流逻辑：局域网直连，外网走复用的 SocksInboundHandler
 		// 		if isLANAddress(localAddr) {
 		// 			log.Printf("TCP Forwarder: LAN address %s, using simplyForward", destStr)
@@ -178,7 +349,7 @@ func (h *TunInboundHandler) Start() error {
 		// 			return
 		// 		}
 
-		log.Printf("UDP Forwarder: DNS traffic detected, using simplyForwardUDP for %s:%d", id.LocalAddress, id.LocalPort)
+		// Create endpoint and hand to tunnel as adapter.UDPConn
 		var wq waiter.Queue
 		ep, err := r.CreateEndpoint(&wq)
 		if err != nil {
@@ -186,9 +357,11 @@ func (h *TunInboundHandler) Start() error {
 			return
 		}
 
-		localAddr, _ := ep.GetLocalAddress()
-		conn := gonet.NewUDPConn(netStack, &wq, ep)
-		go h.simplyForwardUDP(conn, localAddr)
+		pc := gonet.NewUDPConn(netStack, &wq, ep)
+
+		idVal := id
+		wrappedUDP := &adapterUDPConn{pc: pc, c: pc, id: &idVal}
+		T().HandleUDP(wrappedUDP)
 		return
 
 		// 		// 2. (可选) 允许 QUIC 流量尝试直连（避免丢包日志刷屏）
@@ -259,62 +432,15 @@ func (n *netDialerAdapter) Dial(network, addr string) (net.Conn, error) {
 }
 
 func (h *TunInboundHandler) bridgeSocks5Client(conn net.Conn, originalDest string) (net.Conn, error) {
-	// If an upstream socks5 proxy is configured, connect to it using proxy.SOCKS5
-	if h.Config != nil && h.Config.UpstreamSocks != "" {
-		up := h.Config.UpstreamSocks
-		if strings.HasPrefix(up, "socks5://") {
-			up = strings.TrimPrefix(up, "socks5://")
-		}
-
-		log.Printf("bridgeSocks5Client: dialing upstream SOCKS5 %s for %s", up, originalDest)
-		nd := &net.Dialer{
-			Timeout: 5 * time.Second,
-			Control: func(network, address string, c syscall.RawConn) error {
-				var controlErr error
-				if err := c.Control(func(fd uintptr) {
-					res := C.protect_fd(C.int(fd))
-					if res == 0 {
-						log.Printf("TUN protect_fd failed for fd %d", fd)
-					} else {
-						unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
-						log.Printf("TUN protect_fd succeeded for fd %d", fd)
-					}
-				}); err != nil {
-					controlErr = err
-				}
-				return controlErr
-			},
-		}
-
-		adapter := &netDialerAdapter{d: nd}
-		socksDialer, err := proxy.SOCKS5("tcp", up, nil, adapter)
-		if err != nil {
-			log.Printf("bridgeSocks5Client: failed to create upstream SOCKS5 dialer: %v", err)
-			return nil, err
-		}
-
-		proxyConn, err := socksDialer.Dial("tcp", originalDest)
-		if err != nil {
-			log.Printf("bridgeSocks5Client: upstream socks5 dial failed: %v", err)
-			return nil, err
-		}
-
-		log.Printf("bridgeSocks5Client: upstream SOCKS5 connected %s -> %s", up, originalDest)
-		return proxyConn, nil
-	}
-
-	// Fallback: PipeDialer 确保了 Dial 时不会产生任何网络 IO，全部在 conn (即 c1) 里进行
+	// Use in-memory pipe dialer to perform SOCKS5 handshake on provided conn.
 	pd := &PipeDialer{conn: conn}
 
-	// 创建官方 SOCKS5 客户端逻辑
 	dialer, err := proxy.SOCKS5("tcp", "unused:1080", nil, pd)
 	if err != nil {
 		log.Printf("bridgeSocks5Client: failed to create SOCKS5 dialer: %v", err)
 		return nil, err
 	}
 
-	// Dial 会在 pd.pipeConn 上发送 [5, 1, 0] 等字节
-	// 成功后返回的 proxyConn 包装了原有的 conn，并处理了 SOCKS5 响应头
 	log.Printf("bridgeSocks5Client: performing SOCKS5 handshake for %s", originalDest)
 	proxyConn, err := dialer.Dial("tcp", originalDest)
 	if err != nil {
@@ -322,6 +448,22 @@ func (h *TunInboundHandler) bridgeSocks5Client(conn net.Conn, originalDest strin
 	}
 
 	return proxyConn, nil
+}
+
+// setKeepAlive enables TCP keepalive and sets a sane period when possible.
+func setKeepAlive(c net.Conn) {
+	if tc, ok := c.(*net.TCPConn); ok {
+		_ = tc.SetKeepAlive(true)
+		_ = tc.SetKeepAlivePeriod(30 * time.Second)
+	}
+}
+
+// safeConnClose closes the connection only when an error occurred during the
+// surrounding operation (mirrors the original intent of SafeConnClose).
+func safeConnClose(c net.Conn, err error) {
+	if err != nil && c != nil {
+		_ = c.Close()
+	}
 }
 
 // isLANAddress 判断是否是局域网

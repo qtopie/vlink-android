@@ -1,33 +1,4 @@
-package main
-
-/*
-#include <jni.h>
-#include <stdlib.h>
-#include <android/log.h>
-
-#define LOG_TAG "vlink"
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
-
-// Helper to get string from JNI
-static const char* get_string(JNIEnv* env, jstring str) {
-    if (str == NULL) return NULL;
-    return (*env)->GetStringUTFChars(env, str, NULL);
-}
-
-static void release_string(JNIEnv* env, jstring str, const char* chars) {
-    if (str == NULL || chars == NULL) return;
-    (*env)->ReleaseStringUTFChars(env, str, chars);
-}
-
-static void log_to_android(const char* msg) {
-    LOGI("%s", msg);
-}
-
-// Forward declarations for functions implemented in jni_helpers.c
-void store_java_vm(JNIEnv* env, jobject obj);
-jboolean protect_fd(jint fd);
-*/
-import "C"
+package vlinkjni
 
 import (
 	"fmt"
@@ -43,88 +14,56 @@ import (
 
 const defaultGRPCUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0"
 
-//export Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative
-func Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative(
-	env *C.JNIEnv,
-	clazz C.jobject,
-	fd C.jint,
-	serverStr C.jstring,
-	hostStr C.jstring,
-	userAgentStr C.jstring,
-	serviceNameStr C.jstring,
-	tunAddrStr C.jstring,
-	upstreamSocksStr C.jstring,
-	tunMTU C.jint,
-	verbose C.jboolean,
-	logPathStr C.jstring,
+// StartVLink is an exported function intended for gomobile binding.
+// It replaces the previous JNI entry point and uses plain Go types.
+func StartVLink(
+	fd int,
+	server string,
+	host string,
+	userAgent string,
+	serviceName string,
+	tunAddr string,
+	upstreamSocks string,
+	tunMTU int,
+	verbose bool,
+	logPath string,
 ) {
-	C.log_to_android(C.CString("JNI: startVLinkNative entered"))
-	C.store_java_vm(env, clazz)
+	log.Printf("StartVLink called (FD: %d, MTU: %d, TunAddr: %s)", fd, tunMTU, tunAddr)
 
-	// Convert JNI strings to Go strings
-	cLogPath := C.get_string(env, logPathStr)
-	defer C.release_string(env, logPathStr, cLogPath)
-	goLogPath := C.GoString(cLogPath)
-
-	if goLogPath != "" {
-		C.log_to_android(C.CString("JNI: Redirecting log to " + goLogPath))
-		f, err := os.OpenFile(goLogPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	if logPath != "" {
+		log.Printf("Redirecting log to %s", logPath)
+		f, err := os.OpenFile(logPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 		if err == nil {
 			log.SetOutput(f)
 			log.Println("--- Go Engine Log Initialized ---")
 		} else {
-			C.log_to_android(C.CString("JNI: Failed to open log file: " + err.Error()))
+			log.Printf("Failed to open log file: %v", err)
 		}
 	}
 
-	cServer := C.get_string(env, serverStr)
-	defer C.release_string(env, serverStr, cServer)
-	goServer := C.GoString(cServer)
-
-	cHost := C.get_string(env, hostStr)
-	defer C.release_string(env, hostStr, cHost)
-	goHost := C.GoString(cHost)
-
-	cUserAgent := C.get_string(env, userAgentStr)
-	defer C.release_string(env, userAgentStr, cUserAgent)
-	goUserAgent := C.GoString(cUserAgent)
-
-	cServiceName := C.get_string(env, serviceNameStr)
-	defer C.release_string(env, serviceNameStr, cServiceName)
-	goServiceName := C.GoString(cServiceName)
-
-	cTunAddr := C.get_string(env, tunAddrStr)
-	defer C.release_string(env, tunAddrStr, cTunAddr)
-	goTunAddr := C.GoString(cTunAddr)
-
-	cUpstream := C.get_string(env, upstreamSocksStr)
-	defer C.release_string(env, upstreamSocksStr, cUpstream)
-	goUpstream := C.GoString(cUpstream)
-
-	goTunFD := int(fd)
-	goTunMTU := int(tunMTU)
-	goVerbose := verbose != 0
+	goTunFD := fd
+	goTunMTU := tunMTU
+	goVerbose := verbose
 
 	if goVerbose {
 		vlink.SetVerbose(true)
 	}
 
-	// Start in a goroutine to not block the JNI call
+	// Start in a goroutine so the caller is not blocked.
 	go func() {
-		log.Printf("vlink Goroutine: Started (FD: %d, MTU: %d, TunAddr: %s)", goTunFD, goTunMTU, goTunAddr)
-		C.log_to_android(C.CString("Goroutine: Starting TUN handler..."))
+		log.Printf("vlink Goroutine: Started (FD: %d, MTU: %d, TunAddr: %s)", goTunFD, goTunMTU, tunAddr)
 
-		server, cipher, pass, err := parseServerUrl(goServer)
+		serverAddr, cipher, pass, err := parseServerUrl(server)
 		if err != nil {
-			log.Printf("vlink: Error parsing server URL '%s': %v", goServer, err)
+			log.Printf("vlink: Error parsing server URL '%s': %v", server, err)
 			return
 		}
-		log.Printf("vlink: Parsed server address: %s, cipher: %s", server, cipher)
+		log.Printf("vlink: Parsed server address: %s, cipher: %s", serverAddr, cipher)
 
-		if goUserAgent == "" {
-			goUserAgent = defaultGRPCUserAgent
+		if userAgent == "" {
+			userAgent = defaultGRPCUserAgent
 		}
-		os.Setenv("GRPC_USER_AGENT", goUserAgent)
+		os.Setenv("GRPC_USER_AGENT", userAgent)
 
 		ciph, err := core.PickCipher(cipher, nil, pass)
 		if err != nil {
@@ -132,38 +71,34 @@ func Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative(
 			return
 		}
 
-		log.Printf("vlink: Starting TUN inbound. SNI Host: %s, ServiceName: %s", goHost, goServiceName)
+		log.Printf("vlink: Starting TUN inbound. SNI Host: %s, ServiceName: %s", host, serviceName)
 
-		// Initialize and start the ServerManager with the initial server(s).
-		log.Printf("vlink: Initializing ServerManager with server %s", server)
-		sm := servermanager.New([]string{server}, 10*time.Minute, 2*time.Second) // Long interval for regular checks
+		log.Printf("vlink: Initializing ServerManager with server %s", serverAddr)
+		sm := servermanager.New([]string{serverAddr}, 10*time.Minute, 2*time.Second)
 		sm.Start()
-// 		go servermanager.RunCDNScanner(sm, goHost, 443)
 
-		// 3. 初始化 SocksInboundHandler 的配置
-		log.Printf("vlink: Configuring SocksInboundHandler (TLS: true, Host: %s)", goHost)
+		log.Printf("vlink: Configuring SocksInboundHandler (TLS: true, Host: %s)", host)
 		sconf := &inbound.InboundConfig{
 			ListenAddress: "127.0.0.1",
-			ListenPort:    0, // 内存桥接模式，端口设为 0 即可
+			ListenPort:    0,
 			Cipher:        ciph,
-			Host:          goHost,        // 远程服务器的 SNI/Host
-			ServiceName:   goServiceName, // gRPC 服务名
+			Host:          host,
+			ServiceName:   serviceName,
 			TLS:           true,
 			ServerManager: sm,
 		}
 		socksHandler := &inbound.SocksInboundHandler{}
 		socksHandler.SetConfig(sconf)
 
-		// 4. 初始化 TunInboundHandler
 		tconf := &TunInboundConfig{
-			FD:      goTunFD,
-			Address: []string{goTunAddr},
-			MTU:     goTunMTU,
-			UpstreamSocks: goUpstream,
+			FD:            goTunFD,
+			Address:       []string{tunAddr},
+			MTU:           goTunMTU,
+			UpstreamSocks: upstreamSocks,
 		}
 
 		tunHandler := &TunInboundHandler{
-			Config:       tconf,
+			config: tconf,
 			SocksHandler: socksHandler,
 		}
 
@@ -174,7 +109,6 @@ func Java_com_github_shadowsocks_plugin_v2ray_VlinkVpnService_startVLinkNative(
 		}
 
 		log.Printf("vlink: TUN handler started successfully. Entering wait state.")
-		// resources will be closed automatically
 		select {}
 	}()
 }
@@ -189,4 +123,4 @@ func parseServerUrl(server string) (address string, cipher, password string, err
 	return
 }
 
-func main() {}
+// main is intentionally omitted for library binding builds.
