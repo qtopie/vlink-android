@@ -253,8 +253,7 @@ func (h *TunInboundHandler) Start() error {
 				RegisterSockOpt(func(_, _ string, rc syscall.RawConn) error {
 					var innerErr error
 					if err := rc.Control(func(fd uintptr) {
-						res := C.protect_fd(C.int(fd))
-						if res == 0 {
+						if !protectFD(int(fd)) {
 							innerErr = fmt.Errorf("TUN protect_fd failed for fd %d", fd)
 							return
 						}
