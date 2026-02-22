@@ -24,6 +24,7 @@ func StartVLink(
 	serviceName string,
 	tunAddr string,
 	upstreamSocks string,
+	mode string,
 	tunMTU int,
 	verbose bool,
 	logPath string,
@@ -43,6 +44,7 @@ func StartVLink(
 
 	goTunFD := fd
 	goTunMTU := tunMTU
+	goMode := mode
 	goVerbose := verbose
 
 	if goVerbose {
@@ -95,6 +97,7 @@ func StartVLink(
 			Address:       []string{tunAddr},
 			MTU:           goTunMTU,
 			UpstreamSocks: upstreamSocks,
+			Mode:          goMode,
 		}
 
 		tunHandler := &TunInboundHandler{
