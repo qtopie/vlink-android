@@ -110,6 +110,7 @@ class VlinkVpnService : VpnService(), vlinkjni.SocketProtector {
                 options["serviceName"] ?: "moon.shot",
                 tunAddr,
                 options["upstreamSocks"] ?: "socks5://192.168.31.63:1080",
+                options["mode"] ?: "tun2direct",
                 MTU.toLong(),
                 options["verbose"] == "true",
                 logPath
