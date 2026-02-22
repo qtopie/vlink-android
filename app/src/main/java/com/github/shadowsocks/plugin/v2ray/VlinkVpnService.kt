@@ -1,5 +1,6 @@
 package com.github.shadowsocks.plugin.v2ray
 
+import vlinkjni.Vlinkjni
 import android.content.Intent
 import android.net.IpPrefix
 import android.net.TrafficStats
