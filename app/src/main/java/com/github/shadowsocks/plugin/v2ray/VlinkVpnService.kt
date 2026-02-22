@@ -97,15 +97,15 @@ class VlinkVpnService : VpnService() {
             
             Log.i(TAG, "Starting vlink via JNI (FD: $fd, Log: $logPath)")
             
-            vlinkjni.Vlinkjni.StartVLink(
-                fd,
+            Vlinkjni.startVLink(
+                fd.toLong(),
                 serverUrl,
                 options["host"] ?: "qtopie.space",
                 options["userAgent"] ?: "",
                 options["serviceName"] ?: "moon.shot",
                 tunAddr,
                 options["upstreamSocks"] ?: "socks5://192.168.31.63:1080",
-                MTU,
+                MTU.toLong(),
                 options["verbose"] == "true",
                 logPath
             )
