@@ -15,7 +15,7 @@ android {
     kotlinOptions.jvmTarget = javaVersion.toString()
     namespace = "com.github.shadowsocks.plugin.v2ray"
     defaultConfig {
-        minSdk = 23
+        minSdk = 33
         targetSdk = 35
         versionCode = 1030300
         versionName = "1.3.3"
@@ -44,7 +44,7 @@ tasks.register<Exec>("goBuild") {
         println("Warning: Building on Windows is not supported")
     } else {
         executable("/bin/bash")
-        args("go-build.bash", android.defaultConfig.minSdk)
+        args("go-build.bash", "aar", android.defaultConfig.minSdk.toString())
         environment("ANDROID_HOME", android.sdkDirectory)
         environment("ANDROID_NDK_HOME", android.ndkDirectory)
     }
@@ -61,6 +61,8 @@ dependencies {
     implementation("androidx.preference:preference:1.2.1")
     implementation("com.github.shadowsocks:plugin:2.0.1")
     implementation("com.takisoft.preferencex:preferencex-simplemenu:1.1.0")
+    // Local gomobile AAR binding that contains the native libs (libgojni.so)
+    implementation(files("src/main/libs/vlink.aar"))
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
