@@ -317,7 +317,7 @@ func (h *TunInboundHandler) Start() error {
 		idVal := id
 		wrapped := &adapterTCPConn{TCPConn: conn, id: &idVal}
 		// Hand off to tunnel which will use the configured proxy for dialing
-		T().HandleTCP(wrapped)
+		T().handleTCP(wrapped)
 		// 		// 分流逻辑：局域网直连，外网走复用的 SocksInboundHandler
 		// 		if isLANAddress(localAddr) {
 		// 			log.Printf("TCP Forwarder: LAN address %s, using simplyForward", destStr)
@@ -361,7 +361,7 @@ func (h *TunInboundHandler) Start() error {
 
 		idVal := id
 		wrappedUDP := &adapterUDPConn{pc: pc, c: pc, id: &idVal}
-		T().HandleUDP(wrappedUDP)
+		T().handleUDP(wrappedUDP)
 		return
 
 		// 		// 2. (可选) 允许 QUIC 流量尝试直连（避免丢包日志刷屏）
