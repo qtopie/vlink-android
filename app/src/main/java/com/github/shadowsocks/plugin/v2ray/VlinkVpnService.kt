@@ -15,7 +15,7 @@ import java.io.IOException
 import java.net.InetAddress
 
 
-class VlinkVpnService : VpnService() {
+class VlinkVpnService : VpnService(), vlinkjni.SocketProtector {
     companion object {
         private const val TAG = "VlinkVpnService"
         const val ACTION_START = "com.github.shadowsocks.plugin.v2ray.START"
@@ -72,6 +72,11 @@ class VlinkVpnService : VpnService() {
         }
     }
 
+    // Implement gomobile-generated SocketProtector interface
+    override fun protect(fd: Int): Boolean {
+        return try { super.protect(fd) } catch (e: Exception) { false }
+    }
+
     private fun formatSpeed(bytes: Long): String {
         val speed = bytes.toDouble()
         return when {
@@ -120,6 +125,8 @@ class VlinkVpnService : VpnService() {
     private fun startVpn() {
         if (isRunning) return
         INSTANCE = this
+            // Register this Service as the SocketProtector for Go code (gomobile binding)
+            try { Vlinkjni.setSocketProtector(this) } catch (e: Exception) { Log.w(TAG, "Failed to set Go socket protector: ${e.message}") }
         try {
             val options = Settings.getOptions(this)
 
