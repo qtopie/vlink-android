@@ -46,8 +46,8 @@ func metadataFromID(id interface{}) *Metadata {
     }
 }
 
-// ProxyIface defines the minimal proxy surface used by T().SetProxy
-type ProxyIface interface {
+// proxyIface defines the minimal proxy surface used internally by Tunnel
+type proxyIface interface {
     DialContext(ctx context.Context, network, addr string) (net.Conn, error)
     DialUDP(m *Metadata) (net.PacketConn, error)
 }
@@ -55,7 +55,7 @@ type ProxyIface interface {
 // SimpleProxy is a trivial implementation that performs direct dialing.
 type SimpleProxy struct{}
 
-func NewSocks5Proxy(addr, user, pass string) (ProxyIface, error) {
+func newSocks5Proxy(addr, user, pass string) (proxyIface, error) {
     return &Socks5Proxy{addr: addr, user: user, pass: pass}, nil
 }
 
@@ -373,7 +373,7 @@ func ListenPacket(network, address string) (net.PacketConn, error) {
 // Tunnel: minimal handler that accepts adapter connections and dials out.
 type Tunnel struct {
     mu                sync.RWMutex
-    proxy             ProxyIface
+    proxy             proxyIface
     directDialer      func(ctx context.Context, m *Metadata) (net.Conn, error)
     directPacketDial  func(m *Metadata) (net.PacketConn, error)
 }
@@ -388,11 +388,11 @@ func T() *Tunnel {
     return tunnelInst
 }
 
-func (t *Tunnel) SetProxy(p ProxyIface) { t.mu.Lock(); t.proxy = p; t.mu.Unlock() }
-func (t *Tunnel) SetDirectDialer(f func(ctx context.Context, m *Metadata) (net.Conn, error)) {
+func (t *Tunnel) setProxy(p proxyIface) { t.mu.Lock(); t.proxy = p; t.mu.Unlock() }
+func (t *Tunnel) setDirectDialer(f func(ctx context.Context, m *Metadata) (net.Conn, error)) {
     t.mu.Lock(); t.directDialer = f; t.mu.Unlock()
 }
-func (t *Tunnel) SetDirectPacketDialer(f func(m *Metadata) (net.PacketConn, error)) {
+func (t *Tunnel) setDirectPacketDialer(f func(m *Metadata) (net.PacketConn, error)) {
     t.mu.Lock(); t.directPacketDial = f; t.mu.Unlock()
 }
 
