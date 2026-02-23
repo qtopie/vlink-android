@@ -305,13 +305,12 @@ func (h *TunInboundHandler) Start() error {
 						Control: func(network, address string, c syscall.RawConn) error {
 							var controlErr error
 							if err := c.Control(func(fd uintptr) {
-								if !protectFD(int(fd)) {
-								if res == 0 {
-									controlErr = fmt.Errorf("TUN protect_fd failed for fd %d", fd)
-									return
-								}
-								_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
-							}); err != nil {
+							if !protectFD(int(fd)) {
+								controlErr = fmt.Errorf("TUN protect_fd failed for fd %d", fd)
+								return
+							}
+							_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
+						}); err != nil {
 								controlErr = err
 							}
 							return controlErr
@@ -535,14 +534,12 @@ func (h *TunInboundHandler) simplyForward(conn net.Conn, remote tcpip.FullAddres
 		Control: func(network, address string, c syscall.RawConn) error {
 			var controlErr error
 			if err := c.Control(func(fd uintptr) {
-				if !protectFD(int(fd)) {
-				if res == 0 {
-					log.Printf("TUN protect_fd failed for fd %d", fd)
-				} else {
-					unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
-					log.Printf("TUN protect_fd succeeded for fd %d", fd)
-				}
-			}); err != nil {
+							if !protectFD(int(fd)) {
+								controlErr = fmt.Errorf("TUN protect_fd failed for fd %d", fd)
+								return
+							}
+							_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
+						}); err != nil {
 				controlErr = err
 			}
 			return controlErr
@@ -576,14 +573,12 @@ func (h *TunInboundHandler) simplyForwardUDP(conn net.Conn, remote tcpip.FullAdd
 		Control: func(network, address string, c syscall.RawConn) error {
 			var controlErr error
 			if err := c.Control(func(fd uintptr) {
-				if !protectFD(int(fd)) {
-				if res == 0 {
-					log.Printf("TUN protect_fd failed for fd %d", fd)
-				} else {
-					unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
-					log.Printf("TUN protect_fd succeeded for fd %d", fd)
-				}
-			}); err != nil {
+							if !protectFD(int(fd)) {
+								controlErr = fmt.Errorf("TUN protect_fd failed for fd %d", fd)
+								return
+							}
+							_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
+						}); err != nil {
 				controlErr = err
 			}
 			return controlErr
