@@ -2,13 +2,8 @@
 
 package vlinkjni
 
-/*
-#include <jni.h>
-
-// Forward declaration: protect_fd is implemented in jni_helpers.c
-jboolean protect_fd(jint fd);
-*/
-import "C"
+// Note: cgo declarations for protect_fd are split into platform-specific files
+// protector_cgo_linux.go and protector_cgo_android.go to avoid referencing jni.h on desktop.
 
 import (
 	"context"
@@ -310,7 +305,7 @@ func (h *TunInboundHandler) Start() error {
 						Control: func(network, address string, c syscall.RawConn) error {
 							var controlErr error
 							if err := c.Control(func(fd uintptr) {
-								res := C.protect_fd(C.int(fd))
+								if !protectFD(int(fd)) {
 								if res == 0 {
 									controlErr = fmt.Errorf("TUN protect_fd failed for fd %d", fd)
 									return
@@ -540,7 +535,7 @@ func (h *TunInboundHandler) simplyForward(conn net.Conn, remote tcpip.FullAddres
 		Control: func(network, address string, c syscall.RawConn) error {
 			var controlErr error
 			if err := c.Control(func(fd uintptr) {
-				res := C.protect_fd(C.int(fd))
+				if !protectFD(int(fd)) {
 				if res == 0 {
 					log.Printf("TUN protect_fd failed for fd %d", fd)
 				} else {
@@ -581,7 +576,7 @@ func (h *TunInboundHandler) simplyForwardUDP(conn net.Conn, remote tcpip.FullAdd
 		Control: func(network, address string, c syscall.RawConn) error {
 			var controlErr error
 			if err := c.Control(func(fd uintptr) {
-				res := C.protect_fd(C.int(fd))
+				if !protectFD(int(fd)) {
 				if res == 0 {
 					log.Printf("TUN protect_fd failed for fd %d", fd)
 				} else {
