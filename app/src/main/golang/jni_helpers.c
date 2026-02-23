@@ -1,3 +1,6 @@
+//go:build android
+// +build android
+
 #include <jni.h>
 #include <android/log.h>
 #include <stdlib.h>
