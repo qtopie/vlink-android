@@ -6,8 +6,15 @@
 
 流量出站: vpn -> tun.go -> socks5 -> socks5://192.168.31.63:1080
 
-   1. 创建设备： 
-sudo bash ./app/scripts/setup_vlink0.sh
-   2. 运行本地测试： sudo app/scripts/run_vlink_local.sh
-   3. 停止并删除设备： sudo app/scripts/teardown_vlink0.sh
+## 本地测试
+1. 创建设备： make setup
+2. 运行本地测试： make local
+3. 停止并删除设备： make teardown
 
+## 构建apk
+
+```bash
+./gradlew :app:assembleDebug
+```
+
+https://github.com/xjasonlyu/tun2socks/issues/123

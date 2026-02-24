@@ -1,3 +1,4 @@
+//go:build linux && !android
 // +build linux,!android
 
 package main
@@ -34,7 +35,8 @@ func main() {
 		Name: "vlink0",
 		MTU:  1500,
 		FD:   int(file.Fd()),
-		Mode: vlinkjni.ModeTun2Direct,
+		Mode: vlinkjni.ModeTun2SocksUpstream,
+		UpstreamSocks: "socks5://127.0.0.1:1080",
 	}
 
 	handler := &vlinkjni.TunInboundHandler{}

@@ -101,7 +101,7 @@ func StartVLink(
 		}
 
 		tunHandler := &TunInboundHandler{
-			config: tconf,
+			config:       tconf,
 			SocksHandler: socksHandler,
 		}
 
