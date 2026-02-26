@@ -30,6 +30,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
+import androidx.preference.SwitchPreferenceCompat
 import com.github.shadowsocks.plugin.PluginOptions
 
 class ConfigFragment : PreferenceFragmentCompat(), Preference.OnPreferenceChangeListener {
@@ -41,6 +42,7 @@ class ConfigFragment : PreferenceFragmentCompat(), Preference.OnPreferenceChange
     private val host by lazy { findPreference<EditTextPreference>("host")!! }
     private val loglevel by lazy { findPreference<ListPreference>("loglevel")!! }
     private val upstreamSocks by lazy { findPreference<EditTextPreference>("upstreamSocks")!! }
+    private val ipv6Support by lazy { findPreference<SwitchPreferenceCompat>("ipv6_support")!! }
 
     private fun readMode() = Pair("grpc", true)
 
@@ -56,6 +58,7 @@ class ConfigFragment : PreferenceFragmentCompat(), Preference.OnPreferenceChange
         putWithDefault("host", host.text, "qtopie.space")
         putWithDefault("loglevel", loglevel.value, "warning")
         putWithDefault("upstreamSocks", upstreamSocks.text, "")
+        putWithDefault("ipv6_support", ipv6Support.isChecked.toString(), "false")
     }
 
     fun onInitializePluginOptions(options: PluginOptions) {
@@ -69,7 +72,8 @@ class ConfigFragment : PreferenceFragmentCompat(), Preference.OnPreferenceChange
         modePref.summary = "gRPC (TLS enforced)"
         host.text = options["host"] ?: "qtopie.space"
         loglevel.value = options["loglevel"] ?: "debug"
-        upstreamSocks.text = options["upstreamSocks"] ?: "socks5://192.168.31.63:1080"
+        upstreamSocks.text = options["upstreamSocks"] ?: ""
+        ipv6Support.isChecked = options["ipv6_support"]?.toBoolean() ?: false
     }
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {

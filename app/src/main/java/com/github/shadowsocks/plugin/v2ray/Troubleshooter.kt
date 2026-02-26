@@ -2,10 +2,12 @@ package com.github.shadowsocks.plugin.v2ray
 
 import android.content.Context
 import android.net.VpnService
+import com.github.shadowsocks.plugin.PluginOptions
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.Socket
+import java.net.URI
 
 class Troubleshooter(private val context: Context) {
     
@@ -21,9 +23,7 @@ class Troubleshooter(private val context: Context) {
 
     fun runDiagnostics(): List<DiagnosticResult> {
         val results = mutableListOf<DiagnosticResult>()
-
-        // 1. 核心二进制文件检测 (libvlink.so)
-        results.add(checkBinary())
+        val options = Settings.getOptions(context)
 
         // 2. VPN 系统权限检测
         results.add(checkVpnPermission())
@@ -31,19 +31,143 @@ class Troubleshooter(private val context: Context) {
         // 3. 系统架构检测
         results.add(checkArchitecture())
 
-        // 4. TUN 虚拟网卡状态检测 (替代原有的 1080 端口检测)
+        // 4. TUN 虚拟网卡状态检测
         results.add(checkTunInterface())
 
-        // 5. 远程服务器连通性检测
-        results.add(checkNetwork())
+        // 5. SOCKS Proxy 检测
+        // 如果开启了 tun2socks 或者配置了 upstreamSocks，则进行检测
+        if (options["tun2socks"] == "true" || !options["upstreamSocks"].isNullOrBlank()) {
+            results.add(checkSocksTcp(options))
+            results.add(checkSocksUdp(options))
+        }
 
-        // 6. 基础互联网连通性 (Ping 1.1.1.1)
+        // 6. 远程服务器连通性检测
+        results.add(checkNetwork(options))
+
+        // 7. 基础互联网连通性 (Ping 1.1.1.1)
         results.add(checkInternet())
 
-        // 7. 插件日志详细面板
+        // 8. 插件日志详细面板
         results.add(checkPluginLogs())
 
         return results
+    }
+
+    private fun parseSocksAddr(options: PluginOptions): Pair<String, Int> {
+        val upstream = options["upstreamSocks"]
+        if (!upstream.isNullOrBlank()) {
+            try {
+                val uri = URI(upstream)
+                if (uri.host != null) {
+                    return Pair(uri.host, if (uri.port != -1) uri.port else 1080)
+                }
+            } catch (e: Exception) {
+                // 简单的字符串解析兜底
+                val clean = upstream.removePrefix("socks5://")
+                if (clean.contains(":")) {
+                    val host = clean.substringBefore(":")
+                    val port = clean.substringAfter(":").toIntOrNull() ?: 1080
+                    return Pair(host, port)
+                }
+            }
+        }
+        val port = options["local_port"]?.toIntOrNull() ?: 1080
+        return Pair("127.0.0.1", port)
+    }
+
+    private fun Socket.readFully(buffer: ByteArray) {
+        val inStream = getInputStream()
+        var offset = 0
+        while (offset < buffer.size) {
+            val bytesRead = inStream.read(buffer, offset, buffer.size - offset)
+            if (bytesRead == -1) throw Exception("Connection closed prematurely")
+            offset += bytesRead
+        }
+    }
+
+    private fun checkSocksTcp(options: PluginOptions): DiagnosticResult {
+        val (host, port) = parseSocksAddr(options)
+        val title = if (host == "127.0.0.1") "Local SOCKS5 TCP" else "Upstream SOCKS5 TCP"
+        return try {
+            val start = System.currentTimeMillis()
+            val socket = Socket()
+            socket.connect(InetSocketAddress(host, port), 2000)
+            
+            val outStream = socket.getOutputStream()
+            
+            // SOCKS5 Auth Request: [VER 5] [NMETHODS 1] [METHODS 0 (No Auth)]
+            outStream.write(byteArrayOf(0x05, 0x01, 0x00))
+            outStream.flush()
+            
+            val response = ByteArray(2)
+            socket.readFully(response)
+            socket.close()
+
+            if (response[0] != 0x05.toByte() || response[1] != 0x00.toByte()) {
+                 DiagnosticResult(title, Status.ERROR, "Handshake failed, response: ${response.contentToString()}")
+            } else {
+                 val delay = System.currentTimeMillis() - start
+                 DiagnosticResult(title, Status.OK, "SOCKS5 TCP port $host:$port is reachable ($delay ms)")
+            }
+        } catch (e: Exception) {
+            DiagnosticResult(title, Status.ERROR, "Failed to connect or handshake with SOCKS5 TCP $host:$port: ${e.message}")
+        }
+    }
+
+    private fun checkSocksUdp(options: PluginOptions): DiagnosticResult {
+        val (host, port) = parseSocksAddr(options)
+        val title = if (host == "127.0.0.1") "Local SOCKS5 UDP" else "Upstream SOCKS5 UDP"
+        var socket: Socket? = null
+        return try {
+            socket = Socket()
+            socket.connect(InetSocketAddress(host, port), 2000)
+            socket.soTimeout = 2000
+            
+            val outStream = socket.getOutputStream()
+            val inStream = socket.getInputStream()
+            
+            // SOCKS5 Auth Request
+            outStream.write(byteArrayOf(0x05, 0x01, 0x00))
+            outStream.flush()
+            val authResp = ByteArray(2)
+            socket.readFully(authResp)
+            if (authResp[1] != 0x00.toByte()) {
+                throw Exception("TCP Auth failed")
+            }
+
+            // UDP Associate Request
+            val udpAssocReq = byteArrayOf(0x05, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00)
+            outStream.write(udpAssocReq)
+            outStream.flush()
+
+            // Read UDP Associate Response Header
+            val header = ByteArray(4)
+            socket.readFully(header)
+            
+            if (header[1] != 0x00.toByte()) {
+                throw Exception("UDP Associate request rejected, REP: ${header[1]}")
+            }
+
+            // Consume the rest of the address/port info
+            val addrLen = when (header[3]) {
+                0x01.toByte() -> 4 // IPv4
+                0x04.toByte() -> 16 // IPv6
+                0x03.toByte() -> {
+                    val len = inStream.read()
+                    if (len == -1) throw Exception("Failed to read domain length")
+                    len
+                }
+                else -> throw Exception("Unknown ATYP: ${header[3]}")
+            }
+            val remaining = ByteArray(addrLen + 2)
+            socket.readFully(remaining)
+
+            DiagnosticResult(title, Status.OK, "SOCKS5 UDP Associate successful via $host:$port")
+        } catch (e: Exception) {
+            DiagnosticResult(title, Status.ERROR, "UDP Associate failed via $host:$port: ${e.message}")
+        } finally {
+            try { socket?.close() } catch (_: Exception) {}
+        }
     }
 
     private fun checkInternet(): DiagnosticResult {
@@ -109,17 +233,6 @@ class Troubleshooter(private val context: Context) {
         }
     }
 
-    private fun checkBinary(): DiagnosticResult {
-        val path = context.applicationInfo.nativeLibraryDir + "/libvlink.so"
-        val file = File(path)
-        
-        if (!file.exists()) {
-            return DiagnosticResult("Binary Check", Status.ERROR, "Critical: libvlink.so NOT found at $path")
-        }
-
-        return DiagnosticResult("Binary Check", Status.OK, "Native library found: $path")
-    }
-
     private fun checkVpnPermission(): DiagnosticResult {
         val intent = VpnService.prepare(context)
         return if (intent == null) {
@@ -134,8 +247,7 @@ class Troubleshooter(private val context: Context) {
         return DiagnosticResult("Architecture", Status.OK, "Device ABI: $abi")
     }
 
-    private fun checkNetwork(): DiagnosticResult {
-        val options = Settings.getOptions(context)
+    private fun checkNetwork(options: PluginOptions): DiagnosticResult {
         val host = options["server_address"]
         val portStr = options["server_port"]
         

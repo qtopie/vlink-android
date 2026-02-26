@@ -43,6 +43,12 @@
             app:title="Upstream SOCKS5 Proxy"
             app:dialogTitle="Upstream SOCKS5 Proxy (e.g. socks5://192.168.31.63:1080)"
             app:useSimpleSummaryProvider="true"/>
+        <SwitchPreferenceCompat
+            app:key="ipv6_support"
+            android:persistent="true"
+            app:defaultValue="false"
+            app:title="Enable IPv6 Support"
+            app:summary="Route IPv6 traffic through the VPN. Check if your server supports IPv6."/>
     </PreferenceCategory>
 
     <PreferenceCategory

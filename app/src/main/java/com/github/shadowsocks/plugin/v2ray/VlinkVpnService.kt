@@ -1,6 +1,7 @@
 package com.github.shadowsocks.plugin.v2ray
 
-import vlinkjni.Vlinkjni
+import tun.Tun
+import tun.SocketProtector
 import android.content.Intent
 import android.net.IpPrefix
 import android.net.TrafficStats
@@ -15,7 +16,7 @@ import java.io.IOException
 import java.net.InetAddress
 
 
-class VlinkVpnService : VpnService(), vlinkjni.SocketProtector {
+class VlinkVpnService : VpnService(), SocketProtector {
     companion object {
         private const val TAG = "VlinkVpnService"
         const val ACTION_START = "com.github.shadowsocks.plugin.v2ray.START"
@@ -25,7 +26,7 @@ class VlinkVpnService : VpnService(), vlinkjni.SocketProtector {
         const val EXTRA_SPEED_DOWN = "extra_speed_down"
         const val EXTRA_STATE = "extra_state"
 
-        const val MTU = 1200
+        const val MTU = 1400
 
         @Volatile
         private var INSTANCE: VlinkVpnService? = null
@@ -100,16 +101,16 @@ class VlinkVpnService : VpnService(), vlinkjni.SocketProtector {
             val tunAddr = "172.19.0.2/30"
             val logPath = File(cacheDir, "vlink.log").absolutePath
             
-            Log.i(TAG, "Starting vlink via JNI (FD: $fd, Log: $logPath)")
+            Log.i(TAG, "Starting vlink via gomobile (FD: $fd, Log: $logPath)")
             
-            Vlinkjni.startVLink(
+            Tun.startVLink(
                 fd.toLong(),
                 serverUrl,
                 options["host"] ?: "qtopie.space",
                 options["userAgent"] ?: "",
                 options["serviceName"] ?: "moon.shot",
                 tunAddr,
-                options["upstreamSocks"] ?: "socks5://192.168.31.63:1080",
+                options["upstreamSocks"] ?: "socks5://192.168.50.240:1080",
                 options["mode"] ?: "tun2direct",
                 MTU.toLong(),
                 options["verbose"] == "true",
@@ -127,21 +128,28 @@ class VlinkVpnService : VpnService(), vlinkjni.SocketProtector {
         if (isRunning) return
         INSTANCE = this
             // Register this Service as the SocketProtector for Go code (gomobile binding)
-            try { Vlinkjni.setSocketProtector(this) } catch (e: Exception) { Log.w(TAG, "Failed to set Go socket protector: ${e.message}") }
+            try { Tun.setSocketProtector(this) } catch (e: Exception) { Log.w(TAG, "Failed to set Go socket protector: ${e.message}") }
         try {
             val options = Settings.getOptions(this)
+            val ipv6Enabled = options["ipv6_support"]?.toBoolean() ?: false
 
             // 1. Establish VPN Interface
             val builder = Builder()
                 .setSession("vlink")
                 .setMtu(MTU)
                 .addAddress("172.19.0.1", 30) // Go side will be 172.19.0.2
-                .addDnsServer("223.5.5.5")
-                .addDnsServer("223.6.6.6")
-                .addAllowedApplication("com.android.chrome")
-                .addAllowedApplication("com.google.android.apps.bard")
+                .addDnsServer("8.8.8.8")
+                .addDnsServer("1.1.1.1")
+                .addDisallowedApplication(packageName)
                 .addRoute("0.0.0.0", 0)
 
+            if (ipv6Enabled) {
+                // fd00::/8 is for private use (Unique Local Addresses)
+                builder.addAddress("fd00::1", 126)
+                builder.addRoute("::", 0)
+                builder.addDnsServer("2001:4860:4860::8888")
+                builder.addDnsServer("2606:4700:4700::1111")
+            }
 
             // 核心：排除局域网网段
             try {
@@ -150,9 +158,11 @@ class VlinkVpnService : VpnService(), vlinkjni.SocketProtector {
                 builder.excludeRoute(IpPrefix(InetAddress.getByName("172.16.0.0"), 12))
                 builder.excludeRoute(IpPrefix(InetAddress.getByName("192.168.0.0"), 16))
 
-
-                // 如果你有特定的本地 DNS 或特殊地址，也可以一并排除
-                // builder.excludeRoute(new IpPrefix(InetAddress.getByName("1.1.1.1"), 32));
+                if (ipv6Enabled) {
+                    // 排除 IPv6 局域网和链路本地地址
+                    builder.excludeRoute(IpPrefix(InetAddress.getByName("fc00::"), 7))
+                    builder.excludeRoute(IpPrefix(InetAddress.getByName("fe80::"), 10))
+                }
             } catch (e: java.lang.Exception) {
                 Log.e("VPN", "excludeRoute not supported or failed", e)
             }

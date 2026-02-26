@@ -67,11 +67,11 @@ case "$MODE" in
     OUT_DIR="$ROOT/src/main/libs"
     mkdir -p "$OUT_DIR"
 
-    pushd "$ROOT/src/main/golang" >/dev/null
-    echo "Running: gomobile bind -target=android -androidapi 33 -o ${OUT_DIR}/vlink.aar github.com/qtopie/vlink/libvlink (GO111MODULE=on, GOFLAGS=-mod=mod)"
+    pushd "$ROOT/src/main/golang/vlink" >/dev/null
+    echo "Running: gomobile bind -target=android -androidapi 33 -o ${OUT_DIR}/vlink.aar github.com/qtopie/vlink/tun (GO111MODULE=on, GOFLAGS=-mod=mod)"
     export GO111MODULE=on
     export GOFLAGS="-mod=mod"
-    gomobile bind -target=android -androidapi 33 -o "${OUT_DIR}/vlink.aar" github.com/qtopie/vlink/libvlink
+    gomobile bind -target=android -androidapi 33 -o "${OUT_DIR}/vlink.aar" github.com/qtopie/vlink/tun
     popd >/dev/null
 
     echo "Build complete: ${OUT_DIR}/vlink.aar"
@@ -120,7 +120,7 @@ case "$MODE" in
         fi
     fi
 
-    pushd "$ROOT/src/main/golang" >/dev/null
+    pushd "$ROOT/src/main/golang/vlink/tun" >/dev/null
     go build -v -buildmode=c-shared -ldflags="-s -w -extldflags=-llog" -trimpath -o "${OUT_DIR}/libvlink.so" .
     popd >/dev/null
 
