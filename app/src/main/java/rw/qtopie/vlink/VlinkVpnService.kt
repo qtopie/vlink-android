@@ -1,4 +1,4 @@
-package com.github.shadowsocks.plugin.v2ray
+package rw.qtopie.vlink
 
 import tun.Tun
 import tun.SocketProtector
@@ -19,9 +19,9 @@ import java.net.InetAddress
 class VlinkVpnService : VpnService(), SocketProtector {
     companion object {
         private const val TAG = "VlinkVpnService"
-        const val ACTION_START = "com.github.shadowsocks.plugin.v2ray.START"
-        const val ACTION_STOP = "com.github.shadowsocks.plugin.v2ray.STOP"
-        const val BROADCAST_STATS = "com.github.shadowsocks.plugin.v2ray.STATS"
+        const val ACTION_START = "rw.qtopie.vlink.START"
+        const val ACTION_STOP = "rw.qtopie.vlink.STOP"
+        const val BROADCAST_STATS = "rw.qtopie.vlink.STATS"
         const val EXTRA_SPEED_UP = "extra_speed_up"
         const val EXTRA_SPEED_DOWN = "extra_speed_down"
         const val EXTRA_STATE = "extra_state"

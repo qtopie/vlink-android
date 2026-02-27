@@ -13,7 +13,7 @@ android {
         targetCompatibility = javaVersion
     }
     kotlinOptions.jvmTarget = javaVersion.toString()
-    namespace = "com.github.shadowsocks.plugin.v2ray"
+    namespace = "rw.qtopie.vlink"
     defaultConfig {
         minSdk = 33
         targetSdk = 35

@@ -1,4 +1,4 @@
-package com.github.shadowsocks.plugin.v2ray
+package rw.qtopie.vlink
 
 import android.content.BroadcastReceiver
 import android.content.Context

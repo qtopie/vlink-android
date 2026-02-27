@@ -18,7 +18,7 @@
  *                                                                             *
  *******************************************************************************/
 
-package com.github.shadowsocks.plugin.v2ray
+package rw.qtopie.vlink
 
 import android.os.Bundle
 import android.text.InputType
