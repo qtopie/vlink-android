@@ -1,0 +1,4 @@
+[submodule "app/src/main/golang/vlink"]
+    path = app/src/main/golang/vlink
+    url = git@github.com:qtopie/vlink.git
+
